@@ -1,48 +1,39 @@
 from dotenv import load_dotenv
-
 load_dotenv()
+
 import base64
 import streamlit as st
 import os
 import io
-from PIL import Image 
-import pdf2image
+import fitz  # PyMuPDF
 import google.generativeai as genai
-
 from datetime import datetime
+
+print(fitz.__doc__)
+print(fitz.__version__)
 
 # Configure Gemini API
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-def get_gemini_response(input, pdf_content, prompt):
+def get_gemini_response(input, pdf_text, prompt):
     model = genai.GenerativeModel('gemini-1.5-flash')
-    response = model.generate_content([input, pdf_content[0], prompt])
+    # Provide the input prompt, extracted text, and user prompt as separate inputs
+    response = model.generate_content([input, pdf_text, prompt])
     return response.text
 
 def input_pdf_setup(uploaded_file):
     if uploaded_file is not None:
-        # Convert the PDF to image
-        images = pdf2image.convert_from_bytes(uploaded_file.read())
-
-        first_page = images[0]
-
-        # Convert to bytes
-        img_byte_arr = io.BytesIO()
-        first_page.save(img_byte_arr, format='JPEG')
-        img_byte_arr = img_byte_arr.getvalue()
-
-        pdf_parts = [
-            {
-                "mime_type": "image/jpeg",
-                "data": base64.b64encode(img_byte_arr).decode()
-            }
-        ]
-        return pdf_parts
+        pdf_bytes = uploaded_file.read()
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        full_text = ""
+        for page in doc:
+            full_text += page.get_text()
+        return full_text
     else:
         raise FileNotFoundError("No file uploaded")
 
-# Streamlit App
-st.set_page_config(page_title="ATS Resume Expert", page_icon="📄", layout="wide") 
+# Streamlit App UI
+st.set_page_config(page_title="ATS Resume Expert", page_icon="📄", layout="wide")
 
 st.markdown("""
     <h1 style='text-align: center; color: orange;'>📄 ATS Resume Expert</h1>
@@ -88,8 +79,8 @@ Your task is to evaluate the resume against the provided job description.
 
 if submit1:
     if uploaded_file is not None:
-        pdf_content = input_pdf_setup(uploaded_file)
-        response = get_gemini_response(input_prompt1, pdf_content, input_text)
+        pdf_text = input_pdf_setup(uploaded_file)
+        response = get_gemini_response(input_prompt1, pdf_text, input_text)
         st.subheader("📋 Evaluation Result:")
         st.write(response)
     else:
@@ -97,8 +88,8 @@ if submit1:
 
 elif submit2:
     if uploaded_file is not None:
-        pdf_content = input_pdf_setup(uploaded_file)
-        response = get_gemini_response(input_prompt2, pdf_content, input_text)
+        pdf_text = input_pdf_setup(uploaded_file)
+        response = get_gemini_response(input_prompt2, pdf_text, input_text)
         st.subheader("💡 LinkedIn Summary:")
         st.write(response)
     else:
@@ -106,8 +97,8 @@ elif submit2:
 
 elif submit3:
     if uploaded_file is not None:
-        pdf_content = input_pdf_setup(uploaded_file)
-        response = get_gemini_response(input_prompt3, pdf_content, input_text)
+        pdf_text = input_pdf_setup(uploaded_file)
+        response = get_gemini_response(input_prompt3, pdf_text, input_text)
         st.subheader("📊 Match Analysis Report:")
         st.write(response)
     else:
